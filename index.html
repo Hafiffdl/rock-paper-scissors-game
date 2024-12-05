@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rock Paper Scissors Game</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: 20px auto; padding: 20px; }
+        .choices button { margin: 5px; padding: 10px 20px; }
+        #history { margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .action-buttons button { margin-right: 5px; align-items: center;}
+    </style>
+</head>
+<body>
+    <h1>Rock Paper Scissors</h1>
+    <div class="choices">
+        <button onclick="play('gunting')">✌️ Gunting</button>
+        <button onclick="play('kertas')">✋ Kertas</button>
+        <button onclick="play('batu')">✊ Batu</button>
+    </div>
+    <div id="result"></div>
+    <div id="history">
+        <h2>History Permainan</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Pilihan Anda</th>
+                    <th>Pilihan Komputer</th>
+                    <th>Hasil</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let gameHistory = [];
+
+        async function fetchHistory() {
+            const response = await fetch('http://localhost:3000/history');
+            gameHistory = await response.json();
+            updateHistory();
+        }
+
+        function getComputerChoice() {
+            const choices = ['gunting', 'kertas', 'batu'];
+            return choices[Math.floor(Math.random() * choices.length)];
+        }
+
+        function determineWinner(userChoice, computerChoice) {
+            if (userChoice === computerChoice) return 'seri';
+            
+            if (
+                (userChoice === 'gunting' && computerChoice === 'kertas') ||
+                (userChoice === 'kertas' && computerChoice === 'batu') ||
+                (userChoice === 'batu' && computerChoice === 'gunting')
+            ) {
+                return 'menang';
+            }
+            
+            return 'kalah';
+        }
+
+        async function updateHistory() {
+            const historyBody = document.getElementById('historyBody');
+            historyBody.innerHTML = '';
+            
+            gameHistory.forEach((game, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${game.user_choice}</td>
+                    <td>${game.computer_choice}</td>
+                    <td>${game.result}</td>
+                    <td class="action-buttons">
+                        <button onclick="editHistory(${game.id})">✏️ Edit</button>
+                        <button onclick="deleteHistory(${game.id})">🗑️ Delete</button>
+                    </td>
+                `;
+                historyBody.appendChild(row);
+            });
+        }
+
+        async function play(userChoice) {
+            const computerChoice = getComputerChoice();
+            const result = determineWinner(userChoice, computerChoice);
+            
+            // Simpan ke history
+            const response = await fetch('http://localhost:3000/history', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_choice: userChoice,
+                    computer_choice: computerChoice,
+                    result: result
+                })
+            });
+            const newGame = await response.json();
+            gameHistory.push(newGame);
+            
+            // Update tampilan
+            document.getElementById('result').innerHTML = `
+                <p>Pilihan Anda: ${userChoice}</p>
+                <p>Pilihan Komputer: ${computerChoice}</p>
+                <p>Hasil: ${result.toUpperCase()}!</p>
+            `;
+            
+            fetchHistory();
+        }
+
+        async function deleteHistory(id) {
+            await fetch(`http://localhost:3000/history/${id}`, {
+                method: 'DELETE'
+            });
+            gameHistory = gameHistory.filter(game => game.id !== id);
+            updateHistory();
+        }
+
+        async function editHistory(id) {
+            const game = gameHistory.find(game => game.id === id);
+            const newUserChoice = prompt("Edit Pilihan Anda:", game.user_choice);
+            const newComputerChoice = prompt("Edit Pilihan Komputer:", game.computer_choice);
+            const newResult = determineWinner(newUserChoice, newComputerChoice);
+
+            const response = await fetch(`http://localhost:3000/history/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    user_choice: newUserChoice,
+                    computer_choice: newComputerChoice,
+                    result: newResult
+                })
+            });
+
+            const updatedGame = await response.json();
+            const gameIndex = gameHistory.findIndex(game => game.id === id);
+            gameHistory[gameIndex] = updatedGame;
+            updateHistory();
+        }
+
+        fetchHistory();
+    </script>
+</body>
+</html>
